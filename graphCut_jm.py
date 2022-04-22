@@ -67,30 +67,31 @@ def findleftHeight (index_i,index_j,hmap):
 
 def findUpHeight(index_i,index_j,hmap):
     up_height = 0
-    print('Up Height'+str(index_i))
+    #print('Up Height'+str(index_i))
     while (index_i,index_j) in hmap and index_i>=0:
         index_i-=1
         up_height+=1
-    print('Up Height'+str(index_i))    
+    #print('Up Height'+str(index_i))    
     return up_height
 
-def findDownHeight(index_i,index_j,hmap):
+def findDownHeight(index_i,index_j,hmap,output_height):
     down_height = 0
+    #print('Down'+str(output_height))
     while (index_i,index_j) in hmap and index_i <=output_height:
         index_i+=1
         down_height+=1
-    return down_height
+    return down_height-1
 
 # For Overlap Region
 # 
-def findRightHeight(index_i,index_j,hmap):
+def findRightHeight(index_i,index_j,hmap,output_width):
     right_height = 0 
-    print('Right-height'+str(index_j))
+    #print('Right-height'+str(index_j))
     while (index_i,index_j) in hmap and index_j<=output_width:
         index_j+=1
         right_height+=1
-    print('Right-height'+str(index_j))    
-    return right_height 
+    #print('Right-height'+str(index_j))    
+    return right_height -1
 
 output_txture_map = {}
 patch_texture_map = {}
@@ -100,12 +101,15 @@ def computeOverlapRegion(patch_start_index_x,patch_start_index_y,img_arr,src_pat
     #start_pixel = [patch_start_index_x][patch_start_index_y]
     src_patch_x = src_patch_pixel[0]
     src_patch_y = src_patch_pixel[1]
+    overlap_region_fnd = False
     overlap_region_height,overlap_region_width,overlap_region_init_px = 0,0,[0,0]
     for index_i in range(patch_start_index_x,patch_start_index_x+patch_height):
         src_patch_y = src_patch_pixel[1]
         for index_j in range(patch_start_index_y,patch_start_index_y+patch_width):
             curr_pixel = img_arr[index_i][index_j]
-            if (index_i,index_j) in output_txture_map:
+            
+            if (index_i,index_j) in output_txture_map and not overlap_region_fnd:
+                #print('Overlap initial',str(index_i),str(index_j))
                 if (index_i,index_j) in patch_texture_map:
                     #overlap_pixels.append((index_i,index_j))
                     # Go left 
@@ -114,9 +118,9 @@ def computeOverlapRegion(patch_start_index_x,patch_start_index_y,img_arr,src_pat
                     #print(curr_index_i,curr_index_j,left_height)
                     #up_height = findUpHeight(curr_index_i,curr_index_j,patch_texture_map)
                     #print(up_height)
-                    right_height = findRightHeight(curr_index_i,curr_index_j,patch_texture_map)
+                    right_height = findRightHeight(curr_index_i,curr_index_j,patch_texture_map,patch_start_index_y+patch_width)
                     #print(right_height)
-                    bottom_height = findDownHeight(curr_index_i,curr_index_j,patch_texture_map)
+                    bottom_height = findDownHeight(curr_index_i,curr_index_j,patch_texture_map,patch_start_index_x+patch_height)
                     while (curr_index_i,curr_index_j) in patch_texture_map and curr_index_j>=0:
                         curr_index_j-=1
                         
@@ -128,13 +132,14 @@ def computeOverlapRegion(patch_start_index_x,patch_start_index_y,img_arr,src_pat
                     overlap_region_init_px = [patch_start_index_x,patch_start_index_y]
                     overlap_region_height =  bottom_height
                     overlap_region_width =  right_height 
+                    overlap_region_fnd = True
                     #return overlap_region_height,overlap_region_width,overlap_region_init_px
                 else:
                     patch_texture_map[(index_i,index_j)] = True 
             else:
                 output_txture_map[(index_i,index_j)] = True 
                 patch_texture_map[(index_i,index_j)] = True
-                print(src_patch_x,src_patch_y)
+                #print(src_patch_x,src_patch_y)
                 ar_output[index_i-1][index_j-1] = ar_src[src_patch_x-1][src_patch_y-1]
             src_patch_y+=1
         src_patch_x+=1
@@ -144,11 +149,11 @@ def computeOverlapRegion(patch_start_index_x,patch_start_index_y,img_arr,src_pat
 
     
 output_width,output_height = 500,500
-patch_height,patch_width = 100,100
+patch_height,patch_width = 200,200
 im_src = Image.open('src.jpg')
 ar_src = array(im_src)
 height,width = (ar_src.shape[0],ar_src.shape[1])
-print(height,width)
+#print(height,width)
 
 # for index_i in range(height):
 #     for index_j in range(width):
@@ -204,6 +209,30 @@ def computeweighingCost(px1,px2,old_patch,new_patch):
     
 #print(computeweighingCost([50,51],[51,51],ar_src,ar_output))
 
+def fetchOverlapRegion(patch_start_index_x,patch_start_index_y,img_arr,src_patch_pixel):
+    # Compare output Texture with patch 
+    #start_pixel = [patch_start_index_x][patch_start_index_y]
+    src_patch_x = src_patch_pixel[0]
+    src_patch_y = src_patch_pixel[1]
+    overlap_region_fnd = False
+    overlap_region_height,overlap_region_width,overlap_region_init_px = 0,0,[0,0]
+    overlap_pxls_ls = []
+    for index_i in range(patch_start_index_x,patch_start_index_x+patch_height):
+        src_patch_y = src_patch_pixel[1]
+        for index_j in range(patch_start_index_y,patch_start_index_y+patch_width):
+            curr_pixel = img_arr[index_i][index_j]
+            if (index_i,index_j) in output_txture_map and not overlap_region_fnd:
+                #print('Overlap initial',str(index_i),str(index_j))
+                overlap_pxls_ls.append((index_i,index_j))
+            else:
+                output_txture_map[(index_i,index_j)] = True 
+                patch_texture_map[(index_i,index_j)] = True
+                #print(src_patch_x,src_patch_y)
+                ar_output[index_i-1][index_j-1] = ar_src[src_patch_x-1][src_patch_y-1]
+            src_patch_y+=1
+        src_patch_x+=1
+    return overlap_pxls_ls
+
 
 
 
@@ -242,22 +271,37 @@ def computeweighingCost(px1,px2,old_patch,new_patch):
 #height_d=10
 #width_d=10
 
-def computeGraph(overlap_region_height,overlap_region_width):
-
-    for index_i in range(overlap_region_height):
-        for index_j in range(overlap_region_width):
-            dst_pxl_val = ar_output[index_i][index_j]
-            src_pxl_val = ar_src[index_i][index_j]
-            if canMoveRight(index_j,overlap_region_width):
+def computeGraph(overlap_region_height,overlap_region_width,overlap_region_pixel):
+    overlap_region_init_col = overlap_region_pixel[1]
+    overlap_region_fin_col = overlap_region_init_col + overlap_region_width
+    print(overlap_region_fin_col)
+    missing_nodes,loop_cnt=0,0
+    for index_i in range(overlap_region_pixel[0],overlap_region_pixel[0]+overlap_region_height):
+        for index_j in range(overlap_region_pixel[1],overlap_region_pixel[1]+overlap_region_width):
+            # dst_pxl_val = ar_output[index_i][index_j]
+            # src_pxl_val = ar_src[index_i][index_j]
+            test_bool = False
+            if canMoveRight(index_j,overlap_region_pixel[1]+overlap_region_width):
                 G.add_edge((index_i,index_j),(index_i,index_j+1),capacity= (computeweighingCost([index_i,index_j],[index_i,index_j+1],ar_src,ar_output)))
-            if canMoveDown(index_i,overlap_region_height):
+                #test_bool = True 
+            if canMoveDown(index_i,overlap_region_pixel[0]+overlap_region_height):
                 G.add_edge((index_i,index_j),(index_i+1,index_j),capacity= (computeweighingCost([index_i,index_j],[index_i+1,index_j],ar_src,ar_output)))
-            if canMoveDiag(index_i,index_j,overlap_region_height,overlap_region_width):
+                #test_bool = True
+            if canMoveDiag(index_i,index_j,overlap_region_pixel[0]+overlap_region_height,overlap_region_pixel[1]+overlap_region_width):
                 G.add_edge((index_i,index_j),(index_i+1,index_j+1),capacity= (computeweighingCost([index_i,index_j],[index_i+1,index_j+1],ar_src,ar_output)))
-            if checkifinitCol(index_j):
+                #test_bool =  True
+            # if not test_bool:
+            #     #print((index_i,index_j))
+            #     missing_nodes+=1
+            if overlap_region_init_col == (index_j):
                 G.add_edge('s',(index_i,index_j),capacity=float('inf'))
-            if checkiffinalCol(index_j,overlap_region_width):
+            if overlap_region_fin_col-1 == index_j:
                 G.add_edge((index_i,index_j),'t',capacity=float('inf'))
+            #loop_cnt+=1
+    flow_value, flow_dict = (nx.minimum_cut(G,'s','t'))
+    #print(len(G.nodes))
+    #print(missing_nodes,loop_cnt)
+    #print('S---'+str(len(flow_dict[0]))+'---T---'+str(len(flow_dict[1])))
 
         
 #print(len(G.nodes))
@@ -272,14 +316,17 @@ def computeGraph(overlap_region_height,overlap_region_width):
 # print('===')
 # print(ptchA_dict)
 
-trial_run_steps = 100
+trial_run_steps = 5
 # Patches are 50*50
 while trial_run_steps:
     src_patch_pixel = fecthRandomPatch(height,width,patch_height)
     tgt_patch_pixel = fecthRandomPatch(output_height,output_width,patch_height)
-    print(src_patch_pixel)
-    print(tgt_patch_pixel)
-    print(computeOverlapRegion(tgt_patch_pixel[0],tgt_patch_pixel[1],ar_output,src_patch_pixel))
+    #print(src_patch_pixel)
+    #print(tgt_patch_pixel)
+    overlap_region_height,overlap_region_width,overlap_region_init_px = computeOverlapRegion(tgt_patch_pixel[0],tgt_patch_pixel[1],ar_output,src_patch_pixel)
+    if overlap_region_height > 0:
+        print(overlap_region_height,overlap_region_width,overlap_region_init_px)
+        computeGraph(overlap_region_height,overlap_region_width,overlap_region_init_px)
     im_output = createImageFromArr(ar_output)
     im_output.save('Otpt_2.jpg')
     #print(patch_texture_map)
