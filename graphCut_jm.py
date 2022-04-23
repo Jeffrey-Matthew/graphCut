@@ -190,15 +190,15 @@ im_output = Image.fromarray(ar_output)
 #new_image.save('tgt.jpg')
 
 # Compute the weighing cost. 
-
+ 
 
 
 
 # Compute Weighing cost only for overlap patches
-def computeweighingCost(px1,px2,old_patch,new_patch):
+def computeweighingCost(px1,px2,old_patch,new_patch,overlap_pxl_hmap):
     # Test it at 100,100,101,101 ||A(s) - B(s) || + ||A(t) - B(t)
-    as_r,as_g,as_b = old_patch[px1[0]][px1[1]]
-    at_r,at_g,at_b = old_patch[px2[0]][px2[1]]
+    as_r,as_g,as_b = old_patch[overlap_pxl_hmap[px1][0]][overlap_pxl_hmap[px1][1]]
+    at_r,at_g,at_b = old_patch[overlap_pxl_hmap[px2][0]][overlap_pxl_hmap[px2][1]]
     bs_r,bs_g,bs_b = new_patch[px1[0]][px1[1]]
     bt_r,bt_g,bt_b = new_patch[px2[0]][px2[1]]
     rs_r = abs(int(int(as_r) - int(bs_r))) + abs(int(int(at_r) - int(bt_r)))
@@ -214,24 +214,26 @@ def fetchOverlapRegion(patch_start_index_x,patch_start_index_y,img_arr,src_patch
     #start_pixel = [patch_start_index_x][patch_start_index_y]
     src_patch_x = src_patch_pixel[0]
     src_patch_y = src_patch_pixel[1]
-    overlap_region_fnd = False
-    overlap_region_height,overlap_region_width,overlap_region_init_px = 0,0,[0,0]
+    patch_b_hmap = {}
     overlap_pxls_ls = []
+    overlap_pxl_hmap = {}
     for index_i in range(patch_start_index_x,patch_start_index_x+patch_height):
         src_patch_y = src_patch_pixel[1]
         for index_j in range(patch_start_index_y,patch_start_index_y+patch_width):
             curr_pixel = img_arr[index_i][index_j]
-            if (index_i,index_j) in output_txture_map and not overlap_region_fnd:
+            if (index_i,index_j) in output_txture_map:
                 #print('Overlap initial',str(index_i),str(index_j))
                 overlap_pxls_ls.append((index_i,index_j))
+                overlap_pxl_hmap[(index_i,index_j)] = (src_patch_x-1,src_patch_y-1)
             else:
                 output_txture_map[(index_i,index_j)] = True 
                 patch_texture_map[(index_i,index_j)] = True
                 #print(src_patch_x,src_patch_y)
                 ar_output[index_i-1][index_j-1] = ar_src[src_patch_x-1][src_patch_y-1]
+                patch_b_hmap[(index_i,index_j)] = True
             src_patch_y+=1
         src_patch_x+=1
-    return overlap_pxls_ls
+    return overlap_pxls_ls,overlap_pxl_hmap,patch_b_hmap
 
 
 
@@ -299,7 +301,118 @@ def computeGraph(overlap_region_height,overlap_region_width,overlap_region_pixel
                 G.add_edge((index_i,index_j),'t',capacity=float('inf'))
             #loop_cnt+=1
     flow_value, flow_dict = (nx.minimum_cut(G,'s','t'))
+
+def belongstoNewPatch(patch_b_hmap,curr_pxl):
+    if curr_pxl in patch_b_hmap:
+        return True 
+    return False
+
+# Return True if all adjacent pixels belong to overlap region Else false and if it belongs to Patch-B
+
+def checkforAdjacentPixels(curr_pxl,patch_b_hmap,overlap_pxl_hmap,original_patch_height,original_patch_width):
+    pxl_x = curr_pxl[0]
+    pxl_y = curr_pxl[1]
+    edge_hmap = {}
+    edge_incident_hmap = {}
+    edge_rcv_hmap = {}
+    if not ((pxl_x-1)>=0 and (pxl_y-1)>=0 and (pxl_x-1,pxl_y-1) in overlap_pxl_hmap):
+        return False,belongstoNewPatch(patch_b_hmap,(pxl_x-1,pxl_y-1)) 
+    else:
+        if not (((pxl_x,pxl_y) in edge_incident_hmap and (pxl_x-1,pxl_y-1) in edge_rcv_hmap)
+        or ((pxl_x-1,pxl_y-1) in edge_incident_hmap and (pxl_x,pxl_y) in edge_rcv_hmap)
+        ):
+            G.add_edge((pxl_x,pxl_y),(pxl_x-1,pxl_y-1),capacity= (computeweighingCost((pxl_x,pxl_y),(pxl_x-1,pxl_y-1),ar_src,ar_output,overlap_pxl_hmap)))
+        #edge_hmap['(pxl_x,pxl_y)'+'(pxl_x-1,pxl_y-1)'] = True 
+            edge_incident_hmap[(pxl_x,pxl_y)] = True
+            edge_rcv_hmap[(pxl_x-1,pxl_y-1)] = True
+    if not ((pxl_x-1)>=0 and (pxl_x-1,pxl_y) in overlap_pxl_hmap):
+        return False,belongstoNewPatch(patch_b_hmap,(pxl_x-1,pxl_y))  
+    else:
+        if not (((pxl_x,pxl_y) in edge_incident_hmap and (pxl_x-1,pxl_y) in edge_rcv_hmap)
+        or ((pxl_x-1,pxl_y) in edge_incident_hmap and (pxl_x,pxl_y) in edge_rcv_hmap)
+        ):
+            G.add_edge((pxl_x,pxl_y),(pxl_x-1,pxl_y),capacity= (computeweighingCost((pxl_x,pxl_y),(pxl_x-1,pxl_y),ar_src,ar_output,overlap_pxl_hmap)))
+        #edge_hmap['(pxl_x,pxl_y)'+'(pxl_x-1,pxl_y)'] = True 
+            edge_incident_hmap[(pxl_x,pxl_y)] = True
+            edge_rcv_hmap[(pxl_x-1,pxl_y)] = True
+    if not((pxl_y-1)>=0 and (pxl_x,pxl_y-1) in overlap_pxl_hmap):
+        return False,belongstoNewPatch(patch_b_hmap,(pxl_x,pxl_y-1))  
+    else:
+        if not (((pxl_x,pxl_y) in edge_incident_hmap and (pxl_x,pxl_y-1) in edge_rcv_hmap)
+        or ((pxl_x,pxl_y-1) in edge_incident_hmap and (pxl_x,pxl_y) in edge_rcv_hmap)
+        ):
+            G.add_edge((pxl_x,pxl_y),(pxl_x,pxl_y-1),capacity= (computeweighingCost((pxl_x,pxl_y),(pxl_x,pxl_y-1),ar_src,ar_output,overlap_pxl_hmap)))
+        #edge_hmap['(pxl_x,pxl_y)'+'(pxl_x,pxl_y-1)'] = True 
+            edge_incident_hmap[(pxl_x,pxl_y)] = True
+            edge_rcv_hmap[(pxl_x,pxl_y-1)] = True
+    if not((pxl_x+1<original_patch_height) and (pxl_y-1)>=0 and (pxl_x+1,pxl_y-1) in overlap_pxl_hmap):
+        return False,belongstoNewPatch(patch_b_hmap,(pxl_x+1,pxl_y-1)) 
+    else:
+        if not (((pxl_x,pxl_y) in edge_incident_hmap and (pxl_x+1,pxl_y-1) in edge_rcv_hmap)
+        or ((pxl_x+1,pxl_y-1) in edge_incident_hmap and (pxl_x,pxl_y) in edge_rcv_hmap)
+        ):
+            G.add_edge((pxl_x,pxl_y),(pxl_x+1,pxl_y-1),capacity= (computeweighingCost((pxl_x,pxl_y),(pxl_x+1,pxl_y-1),ar_src,ar_output,overlap_pxl_hmap)))
+        #edge_hmap['(pxl_x,pxl_y)'+'(pxl_x+1,pxl_y-1)'] = True  
+            edge_incident_hmap[(pxl_x,pxl_y)] = True
+            edge_rcv_hmap[(pxl_x+1,pxl_y-1)] = True
+    if not((pxl_x+1<original_patch_height) and (pxl_x+1,pxl_y) in overlap_pxl_hmap):
+        return False,belongstoNewPatch(patch_b_hmap,(pxl_x+1,pxl_y))  
+    else:
+        if not (((pxl_x,pxl_y) in edge_incident_hmap and (pxl_x+1,pxl_y) in edge_rcv_hmap)
+        or ((pxl_x+1,pxl_y) in edge_incident_hmap and (pxl_x,pxl_y) in edge_rcv_hmap)
+        ):
+            G.add_edge((pxl_x,pxl_y),(pxl_x+1,pxl_y),capacity= (computeweighingCost((pxl_x,pxl_y),(pxl_x+1,pxl_y),ar_src,ar_output,overlap_pxl_hmap)))
+        #edge_hmap['(pxl_x,pxl_y)'+'(pxl_x+1,pxl_y)'] = True 
+            edge_incident_hmap[(pxl_x,pxl_y)] = True
+            edge_rcv_hmap[(pxl_x+1,pxl_y)] = True
+    if not((pxl_x-1>=0) and (pxl_y+1<original_patch_width) and (pxl_x-1,pxl_y+1) in overlap_pxl_hmap):
+        return False,belongstoNewPatch(patch_b_hmap,(pxl_x-1,pxl_y+1))  
+    else:
+        if not (((pxl_x,pxl_y) in edge_incident_hmap and (pxl_x-1,pxl_y+1) in edge_rcv_hmap)
+        or ((pxl_x-1,pxl_y+1) in edge_incident_hmap and (pxl_x,pxl_y) in edge_rcv_hmap)
+        ):
+            G.add_edge((pxl_x,pxl_y),(pxl_x-1,pxl_y+1),capacity= (computeweighingCost((pxl_x,pxl_y),(pxl_x-1,pxl_y+1),ar_src,ar_output,overlap_pxl_hmap)))
+        #edge_hmap['(pxl_x,pxl_y)'+'(pxl_x-1,pxl_y+1)'] = True 
+            edge_incident_hmap[(pxl_x,pxl_y)] = True
+            edge_rcv_hmap[(pxl_x-1,pxl_y+1)] = True
+    if not((pxl_y+1<original_patch_width) and (pxl_x,pxl_y+1) in overlap_pxl_hmap):
+        return False,belongstoNewPatch(patch_b_hmap,(pxl_x,pxl_y+1)) 
+    else:
+        if not (((pxl_x,pxl_y) in edge_incident_hmap and (pxl_x,pxl_y+1) in edge_rcv_hmap)or ((pxl_x,pxl_y+1) in edge_incident_hmap and (pxl_x,pxl_y) in edge_rcv_hmap)):
+            G.add_edge((pxl_x,pxl_y),(pxl_x,pxl_y+1),capacity= (computeweighingCost((pxl_x,pxl_y),(pxl_x,pxl_y+1),ar_src,ar_output,overlap_pxl_hmap)))
+        #edge_hmap['(pxl_x,pxl_y)'+'(pxl_x,pxl_y+1)'] = True  
+            edge_incident_hmap[(pxl_x,pxl_y)] = True
+            edge_rcv_hmap[(pxl_x,pxl_y+1)] = True
+    if not((pxl_x+1<original_patch_height) and (pxl_y+1<original_patch_width) and (pxl_x+1,pxl_y+1) in overlap_pxl_hmap):
+        return False,belongstoNewPatch(patch_b_hmap,(pxl_x+1,pxl_y+1)) 
+    else:
+        if not (((pxl_x,pxl_y) in edge_incident_hmap and (pxl_x+1,pxl_y+1) in edge_rcv_hmap)or ((pxl_x+1,pxl_y+1) in edge_incident_hmap and (pxl_x,pxl_y) in edge_rcv_hmap)):
+            G.add_edge((pxl_x,pxl_y),(pxl_x+1,pxl_y+1),capacity= (computeweighingCost((pxl_x,pxl_y),(pxl_x+1,pxl_y+1),ar_src,ar_output,overlap_pxl_hmap)))
+        #edge_hmap['(pxl_x,pxl_y)'+'(pxl_x+1,pxl_y+1)'] = True  
+            edge_incident_hmap[(pxl_x,pxl_y)] = True
+            edge_rcv_hmap[(pxl_x+1,pxl_y+1)] = True
+    return True,None
+
+
+def calculateCut(overlap_pxls_ls,patch_b_hmap,overlap_pxl_hmap,tgt_patch_pixel):
+    interior_pxl = None
+    for curr_pxl in overlap_pxls_ls:
+        pxl_x = curr_pxl[0]
+        pxl_y = curr_pxl[1]
+        original_patch_height = tgt_patch_pixel[0] + patch_height # Highest point of patch 
+        original_patch_width = tgt_patch_pixel[1] + patch_width # Furthest point of patch
+        overlap_covered,b_patch = checkforAdjacentPixels(curr_pxl,patch_b_hmap,overlap_pxl_hmap,original_patch_height,original_patch_width)
+        if overlap_covered:
+            # It means that the edges capacities were computed
+            interior_pxl = curr_pxl
+        else:
+            if b_patch:
+                G.add_edge(curr_pxl,'t',capacity=float('inf'))
+            else:
+                G.add_edge('s',curr_pxl,capacity=float('inf'))
+    return interior_pxl
     #print(len(G.nodes))
+
     #print(missing_nodes,loop_cnt)
     #print('S---'+str(len(flow_dict[0]))+'---T---'+str(len(flow_dict[1])))
 
@@ -316,17 +429,34 @@ def computeGraph(overlap_region_height,overlap_region_width,overlap_region_pixel
 # print('===')
 # print(ptchA_dict)
 
-trial_run_steps = 5
+trial_run_steps = 100
 # Patches are 50*50
 while trial_run_steps:
     src_patch_pixel = fecthRandomPatch(height,width,patch_height)
     tgt_patch_pixel = fecthRandomPatch(output_height,output_width,patch_height)
     #print(src_patch_pixel)
-    #print(tgt_patch_pixel)
-    overlap_region_height,overlap_region_width,overlap_region_init_px = computeOverlapRegion(tgt_patch_pixel[0],tgt_patch_pixel[1],ar_output,src_patch_pixel)
-    if overlap_region_height > 0:
-        print(overlap_region_height,overlap_region_width,overlap_region_init_px)
-        computeGraph(overlap_region_height,overlap_region_width,overlap_region_init_px)
+    print(tgt_patch_pixel)
+    overlap_pxl_hmap = {}
+    overlap_pxls_ls = []
+    patch_b_hmap = {}
+    overlap_pxls_ls,overlap_pxl_hmap,patch_b_hmap = fetchOverlapRegion(tgt_patch_pixel[0],tgt_patch_pixel[1],ar_output,src_patch_pixel)
+    if len(overlap_pxls_ls) > 0:
+        #print(overlap_region_height,overlap_region_width,overlap_region_init_px)
+        #computeGraph(overlap_region_height,overlap_region_width,overlap_region_init_px)
+        #print(len(overlap_pxls_ls))
+        G = nx.Graph()
+        #print(len(G.nodes))
+        interior_pxl = calculateCut(overlap_pxls_ls,patch_b_hmap,overlap_pxl_hmap,tgt_patch_pixel)
+        if not G.has_node('t'):
+            print('Overlap region is fully covered')
+            print(len(overlap_pxls_ls))
+            curr_idx=0
+            while G.has_edge('s',(overlap_pxls_ls[curr_idx][0],overlap_pxls_ls[curr_idx][1])):
+                curr_idx+=1
+            G.add_edge((overlap_pxls_ls[curr_idx][0],overlap_pxls_ls[curr_idx][1]),'t',capacity=float('inf'))
+        flow_val,(ptchA_dict,ptchB_dict)=nx.minimum_cut(G,'s','t')
+        print(len(G.nodes),len(ptchA_dict),len(ptchB_dict))
+
     im_output = createImageFromArr(ar_output)
     im_output.save('Otpt_2.jpg')
     #print(patch_texture_map)
