@@ -12,6 +12,7 @@ class pixelNode:
         self.y_index = y_index
 
 def createImageFromArr(arr):
+    print(len(arr))
     im_output = Image.fromarray(arr)
     return im_output
 
@@ -149,7 +150,7 @@ def computeOverlapRegion(patch_start_index_x,patch_start_index_y,img_arr,src_pat
 
     
 output_width,output_height = 500,500
-patch_height,patch_width = 200,200
+patch_height,patch_width = 300,300
 im_src = Image.open('src.jpg')
 ar_src = array(im_src)
 height,width = (ar_src.shape[0],ar_src.shape[1])
@@ -201,10 +202,10 @@ def computeweighingCost(px1,px2,old_patch,new_patch,overlap_pxl_hmap):
     at_r,at_g,at_b = old_patch[overlap_pxl_hmap[px2][0]][overlap_pxl_hmap[px2][1]]
     bs_r,bs_g,bs_b = new_patch[px1[0]][px1[1]]
     bt_r,bt_g,bt_b = new_patch[px2[0]][px2[1]]
-    rs_r = abs(int(int(as_r) - int(bs_r))) + abs(int(int(at_r) - int(bt_r)))
-    rs_g = abs(int(int(as_g) - int(bs_g))) + abs(int(int(at_g) - int(bt_g)))
+    rs_r = math.sqrt(abs(int(int(as_r) - int(bs_r)))) + math.sqrt(abs(int(int(at_r) - int(bt_r))))
+    rs_g = math.sqrt(abs(int(int(as_g) - int(bs_g)))) + math.sqrt(abs(int(int(at_g) - int(bt_g))))
     #print(at_b,at_g)
-    rs_b = abs(int(int(as_b) - int(bs_b))) + abs(int(int(at_b) - int(bt_b)))
+    rs_b = math.sqrt(abs(int(int(as_b) - int(bs_b)))) + math.sqrt(abs(int(int(at_b) - int(bt_b))))
     return (rs_r+rs_g+rs_b)
     
 #print(computeweighingCost([50,51],[51,51],ar_src,ar_output))
@@ -429,9 +430,10 @@ def calculateCut(overlap_pxls_ls,patch_b_hmap,overlap_pxl_hmap,tgt_patch_pixel):
 # print('===')
 # print(ptchA_dict)
 
-trial_run_steps = 100
+trial_run_steps = 10
+flow_val,(ptchA_dict,ptchB_dict) = 0,({},{})
 # Patches are 50*50
-while trial_run_steps:
+while  (len(ptchB_dict) >=4 or len(ptchB_dict)==0):
     src_patch_pixel = fecthRandomPatch(height,width,patch_height)
     tgt_patch_pixel = fecthRandomPatch(output_height,output_width,patch_height)
     #print(src_patch_pixel)
@@ -440,6 +442,7 @@ while trial_run_steps:
     overlap_pxls_ls = []
     patch_b_hmap = {}
     overlap_pxls_ls,overlap_pxl_hmap,patch_b_hmap = fetchOverlapRegion(tgt_patch_pixel[0],tgt_patch_pixel[1],ar_output,src_patch_pixel)
+    
     if len(overlap_pxls_ls) > 0:
         #print(overlap_region_height,overlap_region_width,overlap_region_init_px)
         #computeGraph(overlap_region_height,overlap_region_width,overlap_region_init_px)
@@ -450,11 +453,18 @@ while trial_run_steps:
         if not G.has_node('t'):
             print('Overlap region is fully covered')
             print(len(overlap_pxls_ls))
-            curr_idx=0
-            while G.has_edge('s',(overlap_pxls_ls[curr_idx][0],overlap_pxls_ls[curr_idx][1])):
-                curr_idx+=1
-            G.add_edge((overlap_pxls_ls[curr_idx][0],overlap_pxls_ls[curr_idx][1]),'t',capacity=float('inf'))
+            # curr_idx=0
+            # while G.has_edge('s',(overlap_pxls_ls[curr_idx][0],overlap_pxls_ls[curr_idx][1])):
+            #     curr_idx+=1
+            #G.add_edge((overlap_pxls_ls[curr_idx][0],overlap_pxls_ls[curr_idx][1]),'t',capacity=float('inf'))
+            G.add_edge(interior_pxl,'t',capacity=float('inf'))
         flow_val,(ptchA_dict,ptchB_dict)=nx.minimum_cut(G,'s','t')
+        for pixels in ptchB_dict:
+            if not pixels == 't':
+                #print(ar_output[pixels[0]][pixels[1]])
+                print(overlap_pxl_hmap[pixels])
+                ar_output[pixels[0]][pixels[1]] = ar_src[overlap_pxl_hmap[pixels][0]][overlap_pxl_hmap[pixels][1]]
+        
         print(len(G.nodes),len(ptchA_dict),len(ptchB_dict))
 
     im_output = createImageFromArr(ar_output)
