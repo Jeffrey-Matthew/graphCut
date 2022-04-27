@@ -28,3 +28,8 @@ For custom Min Cut Algorithm - https://www.geeksforgeeks.org/ford-fulkerson-algo
 1. For the custom Edmonds Karp algorithm, it is executed if the number of nodes is less than 5500 [Line:318]
    Because edmonds karp algorithm takes a lot of time to execute compared to the inbuilt library [Line:316] which I believe  uses preflow algorithms. 
    To ensure that the project doesn't run too long, the limit has been provided.
+
+--          To run      --
+python graphCut_jm.py <img_name>
+E.g. python graphCut_jm.py olives.jpeg
+Note: <img_name> should be present in the Images Folder
