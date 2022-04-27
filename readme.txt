@@ -33,3 +33,6 @@ For custom Min Cut Algorithm - https://www.geeksforgeeks.org/ford-fulkerson-algo
 python graphCut_jm.py <img_name>
 E.g. python graphCut_jm.py olives.jpeg
 Note: <img_name> should be present in the Images Folder
+
+-- Demo videos --
+https://umbc-my.sharepoint.com/:f:/g/personal/jeffrer1_umbc_edu/Eu9DObZLrVZMnrohtZr101kBEjZFZFgsuWiHOCAHm19fgg?e=XoXAof
